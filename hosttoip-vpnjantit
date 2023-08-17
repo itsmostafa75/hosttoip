@@ -1,0 +1,119 @@
+import dns.message              #  --> pip install dnspython
+import requests                 #  --> pip install requests
+
+import dns.rdatatype
+import base64
+import socket
+import time
+import signal
+import sys
+
+def signal_handler(signal, frame):
+    """ Catch Ctrl-C and Exit """
+    sys.exit(0)
+
+# Register SIGINT Handler
+signal.signal(signal.SIGINT, signal_handler)
+
+
+def dns_query(server_name):     
+
+    
+    quary_params = {
+        # 'name': server_name,    # no need for this when using dns wire-format , cause 400 err on some server
+        'type': 'A',
+        'ct': 'application/dns-message',
+        }
+    
+
+    try:
+        query_message = dns.message.make_query(server_name,'A')
+        query_wire = query_message.to_wire()
+        query_base64 = base64.urlsafe_b64encode(query_wire).decode('utf-8')
+        query_base64 = query_base64.replace('=','')    # remove base64 padding to append in url            
+
+        query_url = DNS_url + query_base64
+        ans = requests.get( query_url , params=quary_params , headers={'accept': 'application/dns-message'})
+        
+        # Parse the response as a DNS packet
+        if ans.status_code == 200 and ans.headers.get('content-type') == 'application/dns-message':
+            answer_msg = dns.message.from_wire(ans.content)
+
+            resolved_ip = None
+            for x in answer_msg.answer:
+                if (x.rdtype == dns.rdatatype.A):
+                    resolved_ip = x[0].address    # pick first ip in DNS answer
+                    break
+            
+            return resolved_ip
+        else:
+            print(f'Error: {ans.status_code} {ans.reason}')
+    except Exception as e:
+        print(repr(e))
+ 
+ 
+def tcp_ping(host, port=65533, timeout=1):
+    s = socket.socket()
+    s.settimeout(timeout)
+    # s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    end = None
+    try:
+        start = time.time()
+        s.connect((host, port))
+        s.close()
+        result = True
+        end = time.time()
+        ms = 1000*(end-start)
+        return int(ms)
+    except:
+        return 0
+
+   
+    
+
+
+
+
+# DNS_url = 'https://cloudflare-dns.com/dns-query?dns='      # not working in iran , ip blocked
+# DNS_url = 'https://dns.google/dns-query?dns='              # not working in iran , ip blocked
+# DNS_url = 'https://doh.opendns.com/dns-query?dns='           # not working in iran , ip blocked
+# DNS_url = 'https://secure.avastdns.com/dns-query?dns='      # not working in iran , ip blocked
+# DNS_url = 'https://doh.libredns.gr/dns-query?dns='          # not working in iran , ip blocked
+DNS_url = 'https://dns.electrotm.org/dns-query?dns='
+# DNS_url = 'https://dns.bitdefender.net/dns-query?dns='
+# DNS_url = 'https://cluster-1.gac.edu/dns-query?dns='
+ 
+host_array_str='ae4.vpnjantit.com ae5.vpnjantit.com az1.vpnjantit.com bg1.vpnjantit.com bg2.vpnjantit.com bg3.vpnjantit.com bh1.vpnjantit.com br6.vpnjantit.com ca1.vpnjantit.com ca2.vpnjantit.com cl1.vpnjantit.com cz1.vpnjantit.com cz2.vpnjantit.com fi1.vpnjantit.com gr1.vpnjantit.com gr2.vpnjantit.com gr4.vpnjantit.com gr5.vpnjantit.com gr6.vpnjantit.com hu1.vpnjantit.com ie1.vpnjantit.com il1.vpnjantit.com it1.vpnjantit.com it2.vpnjantit.com kz1.vpnjantit.com lu1.vpnjantit.com md1.vpnjantit.com nl1.vpnjantit.com nl2.vpnjantit.com nl3.vpnjantit.com ph7.vpnjantit.com pk2.vpnjantit.com pl1.vpnjantit.com pl2.vpnjantit.com premihk1.vpnjantit.com premiindo.vpnjantit.com premijp1.vpnjantit.com premisg2.vpnjantit.com premisg3.vpnjantit.com premisg4.vpnjantit.com premisg5.vpnjantit.com premiuk.vpnjantit.com premiusa2.vpnjantit.com premiusa3.vpnjantit.com pt1.vpnjantit.com ro1.vpnjantit.com ru2.vpnjantit.com sa2.vpnjantit.com sau1.vpnjantit.com se1.vpnjantit.com sg5.vpnjantit.com sg7.vpnjantit.com sg8.vpnjantit.com sg9.vpnjantit.com sp1.vpnjantit.com sz1.vpnjantit.com tr5.vpnjantit.com tr6.vpnjantit.com ua1.vpnjantit.com ua2.vpnjantit.com ua3.vpnjantit.com ua4.vpnjantit.com usa1.vpnjantit.com usa2.vpnjantit.com usa3.vpnjantit.com usa4.vpnjantit.com usa5.vpnjantit.com usa7.vpnjantit.com ae2.vpnjantit.com au2.vpnjantit.com hk3.vpnjantit.com kh1.vpnjantit.com kh2.vpnjantit.com ph8.vpnjantit.com pk1.vpnjantit.com premiph3.vpnjantit.com premisg1.vpnjantit.com sg4.vpnjantit.com th2.vpnjantit.com tr4.vpnjantit.com uk.vpnjantit.com uk2.vpnjantit.com usa6.vpnjantit.com vn2.vpnjantit.com vn6.vpnjantit.com ae1.vpnjantit.com ae3.vpnjantit.com dfr1.vpnjantit.com fr1.vpnjantit.com ph3.vpnjantit.com premibr1.vpnjantit.com premifr1.vpnjantit.com ru1.vpnjantit.com sg11.vpnjantit.com sg12.vpnjantit.com sg13.vpnjantit.com sg2.vpnjantit.com sg3.vpnjantit.com th1.vpnjantit.com vn1.vpnjantit.com ' 
+
+
+
+# host_array_str='sg1.ssh3.us sg2.ssh3.us sg3.ssh3.us'
+
+host_array=host_array_str.split(' ')
+max_len=len(max(host_array , key = len))
+used = set()
+unique_host_array = [x for x in host_array if x not in used and (used.add(x) or True)]
+
+results=[]
+print(f"\n{'Host': ^{max_len}} | {'IP': ^15} | {'Ping': ^9}")
+print(f"{'':-<{max_len+30}}")
+
+for host in unique_host_array:
+    try:
+        ip = dns_query(host)
+        ping = tcp_ping(ip, timeout=1,port=80)
+        if ping==0 :
+            continue
+        print(f"{host: ^{max_len}} | {ip: ^15} | {str(ping)+'ms': ^9}")
+        results.append((host,ip,ping))
+    except:
+        pass
+
+results.sort(key=lambda tup: tup[2], reverse=False)
+print(f"\n{'':=<{max_len+26}}\n")
+print("Sorted results:\n")
+print(f"{'Host': ^{max_len}} | {'IP': ^15} | {'Ping': ^9}")
+print(f"{'':-<{max_len+30}}")
+for p in results:
+    (host,ip,ping)=p
+    print(f"{host: ^{max_len}} | {ip: ^15} | {str(ping)+'ms': ^9}")
