@@ -1,0 +1,119 @@
+import dns.message              #  --> pip install dnspython
+import requests                 #  --> pip install requests
+
+import dns.rdatatype
+import base64
+import socket
+import time
+import signal
+import sys
+
+def signal_handler(signal, frame):
+    """ Catch Ctrl-C and Exit """
+    sys.exit(0)
+
+# Register SIGINT Handler
+signal.signal(signal.SIGINT, signal_handler)
+
+
+def dns_query(server_name):     
+
+    
+    quary_params = {
+        # 'name': server_name,    # no need for this when using dns wire-format , cause 400 err on some server
+        'type': 'A',
+        'ct': 'application/dns-message',
+        }
+    
+
+    try:
+        query_message = dns.message.make_query(server_name,'A')
+        query_wire = query_message.to_wire()
+        query_base64 = base64.urlsafe_b64encode(query_wire).decode('utf-8')
+        query_base64 = query_base64.replace('=','')    # remove base64 padding to append in url            
+
+        query_url = DNS_url + query_base64
+        ans = requests.get( query_url , params=quary_params , headers={'accept': 'application/dns-message'})
+        
+        # Parse the response as a DNS packet
+        if ans.status_code == 200 and ans.headers.get('content-type') == 'application/dns-message':
+            answer_msg = dns.message.from_wire(ans.content)
+
+            resolved_ip = None
+            for x in answer_msg.answer:
+                if (x.rdtype == dns.rdatatype.A):
+                    resolved_ip = x[0].address    # pick first ip in DNS answer
+                    break
+            
+            return resolved_ip
+        else:
+            print(f'Error: {ans.status_code} {ans.reason}')
+    except Exception as e:
+        print(repr(e))
+ 
+ 
+def tcp_ping(host, port=65533, timeout=1):
+    s = socket.socket()
+    s.settimeout(timeout)
+    # s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    end = None
+    try:
+        start = time.time()
+        s.connect((host, port))
+        s.close()
+        result = True
+        end = time.time()
+        ms = 1000*(end-start)
+        return int(ms)
+    except:
+        return 0
+
+   
+    
+
+
+
+
+# DNS_url = 'https://cloudflare-dns.com/dns-query?dns='      # not working in iran , ip blocked
+# DNS_url = 'https://dns.google/dns-query?dns='              # not working in iran , ip blocked
+# DNS_url = 'https://doh.opendns.com/dns-query?dns='           # not working in iran , ip blocked
+# DNS_url = 'https://secure.avastdns.com/dns-query?dns='      # not working in iran , ip blocked
+# DNS_url = 'https://doh.libredns.gr/dns-query?dns='          # not working in iran , ip blocked
+DNS_url = 'https://dns.electrotm.org/dns-query?dns='
+# DNS_url = 'https://dns.bitdefender.net/dns-query?dns='
+# DNS_url = 'https://cluster-1.gac.edu/dns-query?dns='
+ 
+host_array_str='lus-2.opensvr.net aus-1.opensvr.net uks-2.opensvr.net uss-4.opensvr.net frs-3.opensvr.net chs-1.opensvr.net xs-2.opensvr.net xs-1.opensvr.net cas-2.opensvr.net uks-1.opensvr.net lus-1.opensvr.net uss-3.opensvr.net ids-4.opensvr.net uas-1.opensvr.net bgs-1.opensvr.net ids-3.opensvr.net frs-2.opensvr.net des-2.opensvr.net uss-2.opensvr.net ins-1.opensvr.net ids-2.opensvr.net sgs-5.opensvr.net cas-1.opensvr.net frs-1.opensvr.net sgs-3.opensvr.net ids-1.opensvr.net sgs-2.opensvr.net des-1.opensvr.net sgs-1.opensvr.net uss-1.opensvr.net sgs-4.opensvr.net ' 
+
+
+
+# host_array_str='sg1.ssh3.us sg2.ssh3.us sg3.ssh3.us'
+
+host_array=host_array_str.split(' ')
+max_len=len(max(host_array , key = len))
+used = set()
+unique_host_array = [x for x in host_array if x not in used and (used.add(x) or True)]
+
+results=[]
+print(f"\n{'Host': ^{max_len}} | {'IP': ^15} | {'Ping': ^9}")
+print(f"{'':-<{max_len+30}}")
+
+for host in unique_host_array:
+    try:
+        ip = dns_query(host)
+        ping = tcp_ping(ip, timeout=1,port=80)
+        if ping==0 :
+            continue
+        print(f"{host: ^{max_len}} | {ip: ^15} | {str(ping)+'ms': ^9}")
+        results.append((host,ip,ping))
+    except:
+        pass
+
+results.sort(key=lambda tup: tup[2], reverse=False)
+print(f"\n{'':=<{max_len+26}}\n")
+print("Sorted results:\n")
+print(f"{'Host': ^{max_len}} | {'IP': ^15} | {'Ping': ^9}")
+print(f"{'':-<{max_len+30}}")
+for p in results:
+    (host,ip,ping)=p
+    print(f"{host: ^{max_len}} | {ip: ^15} | {str(ping)+'ms': ^9}")
